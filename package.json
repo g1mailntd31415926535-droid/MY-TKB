@@ -1,0 +1,34 @@
+{
+  "name": "track-tkb",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "ai": "node --env-file-if-exists=.env server/index.mjs",
+    "dev:all": "node scripts/dev.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "playwright-core": "^1.64.1",
+    "tailwindcss": "^4.1.13",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}
