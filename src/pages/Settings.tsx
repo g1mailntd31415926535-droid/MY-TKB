@@ -283,24 +283,14 @@ export function SettingsPage() {
               <Download className="h-3.5 w-3.5" /> Xuất JSON
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!confirm("Nạp lại dữ liệu demo? Dữ liệu hiện tại sẽ bị thay thế.")) return;
-                reset(true).catch((e) => toast.error(String(e)));
-              }}
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Nạp dữ liệu demo
-            </Button>
-            <Button
               variant="danger"
               size="sm"
               onClick={() => {
-                if (!confirm("Xoá toàn bộ dữ liệu?")) return;
+                if (!confirm("Xoá toàn bộ dữ liệu và làm trống lịch?")) return;
                 reset(false).catch((e) => toast.error(String(e)));
               }}
             >
-              <Trash2 className="h-3.5 w-3.5" /> Xoá hết
+              <Trash2 className="h-3.5 w-3.5" /> Xoá hết dữ liệu
             </Button>
           </div>
         </Card>
