@@ -15,4 +15,7 @@ export interface Repo {
   putException(e: SessionException): Promise<void>;
   removeException(id: string): Promise<void>;
   reset(demo: DataSnapshot): Promise<DataSnapshot>;
+  /** Bản sao dữ liệu cloud lần gần nhất, dùng khi mất mạng (chỉ repo Supabase). */
+  loadCache?(): Promise<DataSnapshot | null>;
+  saveCache?(data: DataSnapshot): void;
 }

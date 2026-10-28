@@ -1,15 +1,13 @@
-﻿import { chromium } from "playwright-core";
+﻿import { launchBrowser, BASE_URL } from "./lib/browser.mjs";
 
-const browser = await chromium.launch({
-  executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-});
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
 page.on("dialog", (d) => d.accept());
 
-await page.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
+await page.goto(BASE_URL + "/?local=1", { waitUntil: "networkidle" });
 await page.waitForTimeout(700);
 await page.getByRole("button", { name: "Cài đặt" }).first().click();
 await page.waitForTimeout(500);

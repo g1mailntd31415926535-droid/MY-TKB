@@ -1,8 +1,6 @@
-import { chromium } from "playwright-core";
+import { launchBrowser, BASE_URL } from "./lib/browser.mjs";
 
-const browser = await chromium.launch({
-  executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-});
+const browser = await launchBrowser();
 const errors = [];
 
 // ---------- 1. Migration dữ liệu cũ (chưa có tag) ----------
@@ -10,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
 
-await page.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
+await page.goto(BASE_URL + "/?local=1", { waitUntil: "networkidle" });
 await page.waitForTimeout(800);
 
 await page.evaluate(() => {
@@ -52,7 +50,7 @@ console.log(
 // ---------- 2. Mobile ----------
 const m = await browser.newPage({ viewport: { width: 390, height: 844 } });
 m.on("pageerror", (e) => errors.push("mobile pageerror: " + e.message));
-await m.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
+await m.goto(BASE_URL + "/?local=1", { waitUntil: "networkidle" });
 await m.waitForTimeout(900);
 await m.screenshot({ path: "smoke/18-mobile-today.png" });
 await m.getByRole("button", { name: "Thời khoá biểu", exact: true }).click();

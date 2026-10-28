@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -48,9 +48,12 @@ export function AllPage() {
   const today = toISODate(new Date());
   const semesterEnd = semesterEndISO(data.settings.semester);
 
-  const inTags = (tagId: string | null | undefined) =>
-    tagFilter.length === 0 ||
-    (tagId ? tagFilter.includes(tagId) : tagFilter.includes(NO_TAG));
+  const inTags = useCallback(
+    (tagId: string | null | undefined) =>
+      tagFilter.length === 0 ||
+      (tagId ? tagFilter.includes(tagId) : tagFilter.includes(NO_TAG)),
+    [tagFilter],
+  );
 
   const sessions = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -68,7 +71,7 @@ export function AllPage() {
         a.session.day_of_week - b.session.day_of_week ||
         a.session.period_start - b.session.period_start,
       );
-  }, [data.sessions, data.subjects, filter, q, tagFilter]);
+  }, [data.sessions, data.subjects, filter, q, inTags]);
 
   /**
    * Mục đã gắn nhóm. Mục không gắn nhóm (tag_id = null) được tách riêng ở
@@ -86,7 +89,7 @@ export function AllPage() {
         return `${e.title} ${e.note ?? ""} ${e.location ?? ""}`.toLowerCase().includes(needle);
       })
       .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time ?? "").localeCompare(b.start_time ?? ""));
-  }, [data.entries, filter, q, tagFilter]);
+  }, [data.entries, filter, q, inTags]);
 
   const recurring = useMemo(
     () =>

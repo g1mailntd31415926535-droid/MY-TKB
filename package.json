@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "ai": "node --env-file-if-exists=.env server/index.mjs",
-    "dev:all": "node scripts/dev.mjs"
+    "dev:all": "node scripts/dev.mjs",
+    "lint": "eslint .",
+    "check": "node scripts/run-checks.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
@@ -22,13 +24,18 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.1.13",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "playwright-core": "^1.64.1",
     "tailwindcss": "^4.1.13",
     "typescript": "~5.8.3",
+    "typescript-eslint": "^8.72.1",
     "vite": "^7.0.4"
   }
 }

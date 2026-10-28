@@ -6,6 +6,8 @@ import { DEMO, emptySnapshot } from "../lib/seed";
 interface DataState {
   ready: boolean;
   error: string | null;
+  /** Đang hiện dữ liệu cache vì không kết nối được Supabase. */
+  offline: boolean;
   mode: "local" | "supabase";
   data: DataSnapshot;
   init: () => Promise<void>;
@@ -26,9 +28,39 @@ interface DataState {
 
 const repo = getRepo();
 
+function isNetworkError(message: string) {
+  return (
+    (typeof navigator !== "undefined" && !navigator.onLine) ||
+    /Không kết nối được Supabase|Failed to fetch|NetworkError|fetch failed|Load failed/i.test(message)
+  );
+}
+
 export const useData = create<DataState>((set, get) => {
-  const commit = (updater: (d: DataSnapshot) => DataSnapshot) =>
-    set({ data: updater(get().data) });
+  /**
+   * Cập nhật giao diện ngay, rồi ghi xuống repo. Ghi lỗi thì đưa giao diện
+   * về như cũ (hoặc tải lại nếu đã có thay đổi khác chen vào) và ném lỗi tiếp
+   * để nơi gọi hiện toast.
+   */
+  const mutate = async (updater: (d: DataSnapshot) => DataSnapshot, write: () => Promise<void>) => {
+    const prev = get().data;
+    const next = updater(prev);
+    set({ data: next });
+    try {
+      await write();
+    } catch (e) {
+      if (get().data === next) {
+        set({ data: prev });
+      } else {
+        try {
+          set({ data: await repo.load() });
+        } catch {
+          /* giữ nguyên, lỗi gốc vẫn được báo bên dưới */
+        }
+      }
+      throw e;
+    }
+    repo.saveCache?.(get().data);
+  };
 
   const upsert = <T extends { id: string }>(list: T[], item: T) => {
     const i = list.findIndex((x) => x.id === item.id);
@@ -41,6 +73,7 @@ export const useData = create<DataState>((set, get) => {
   return {
     ready: false,
     error: null,
+    offline: false,
     mode: repo.mode,
     data: emptySnapshot(),
 
@@ -48,82 +81,78 @@ export const useData = create<DataState>((set, get) => {
       set({ error: null });
       try {
         const data = await repo.load();
-        set({ data, ready: true, mode: repo.mode });
+        set({ data, ready: true, offline: false, mode: repo.mode });
+        repo.saveCache?.(data);
       } catch (e) {
-        set({ ready: true, error: e instanceof Error ? e.message : String(e) });
+        const message = e instanceof Error ? e.message : String(e);
+        const cached = isNetworkError(message) ? await repo.loadCache?.() : null;
+        if (cached) {
+          set({ data: cached, ready: true, offline: true, mode: repo.mode });
+          return;
+        }
+        set({ ready: true, error: message });
         throw e;
       }
     },
 
     async saveSettings(settings) {
-      commit((d) => ({ ...d, settings }));
-      await repo.putSettings(settings);
+      await mutate((d) => ({ ...d, settings }), () => repo.putSettings(settings));
     },
 
     async saveTag(tag) {
-      commit((d) => ({ ...d, tags: upsert(d.tags, tag) }));
-      await repo.putTag(tag);
+      await mutate((d) => ({ ...d, tags: upsert(d.tags, tag) }), () => repo.putTag(tag));
     },
 
     async deleteTag(id) {
-      commit((d) => ({
+      await mutate((d) => ({
         ...d,
         tags: d.tags.filter((t) => t.id !== id),
         sessions: d.sessions.map((s) => (s.tag_id === id ? { ...s, tag_id: null } : s)),
         entries: d.entries.map((e) => (e.tag_id === id ? { ...e, tag_id: null } : e)),
-      }));
-      await repo.removeTag(id);
+      }), () => repo.removeTag(id));
     },
 
     async saveSubject(subject) {
-      commit((d) => ({ ...d, subjects: upsert(d.subjects, subject) }));
-      await repo.putSubject(subject);
+      await mutate((d) => ({ ...d, subjects: upsert(d.subjects, subject) }), () => repo.putSubject(subject));
     },
 
     async deleteSubject(id) {
-      commit((d) => ({
+      await mutate((d) => ({
         ...d,
         subjects: d.subjects.filter((s) => s.id !== id),
         sessions: d.sessions.filter((s) => s.subject_id !== id),
-      }));
-      await repo.removeSubject(id);
+      }), () => repo.removeSubject(id));
     },
 
     async saveSession(session) {
-      commit((d) => ({ ...d, sessions: upsert(d.sessions, session) }));
-      await repo.putSession(session);
+      await mutate((d) => ({ ...d, sessions: upsert(d.sessions, session) }), () => repo.putSession(session));
     },
 
     async deleteSession(id) {
-      commit((d) => ({
+      await mutate((d) => ({
         ...d,
         sessions: d.sessions.filter((s) => s.id !== id),
         exceptions: d.exceptions.filter((x) => x.session_id !== id),
-      }));
-      await repo.removeSession(id);
+      }), () => repo.removeSession(id));
     },
 
     async saveEntry(entry) {
-      commit((d) => ({ ...d, entries: upsert(d.entries, entry) }));
-      await repo.putEntry(entry);
+      await mutate((d) => ({ ...d, entries: upsert(d.entries, entry) }), () => repo.putEntry(entry));
     },
 
     async deleteEntry(id) {
-      commit((d) => ({ ...d, entries: d.entries.filter((e) => e.id !== id) }));
-      await repo.removeEntry(id);
+      await mutate((d) => ({ ...d, entries: d.entries.filter((e) => e.id !== id) }), () => repo.removeEntry(id));
     },
 
     async saveException(exception) {
-      commit((d) => ({
+      await mutate((d) => ({
         ...d,
         exceptions: upsert(d.exceptions, exception),
-      }));
-      await repo.putException(exception);
+      }), () => repo.putException(exception));
     },
 
     async deleteException(id) {
-      commit((d) => ({ ...d, exceptions: d.exceptions.filter((x) => x.id !== id) }));
-      await repo.removeException(id);
+      await mutate((d) => ({ ...d, exceptions: d.exceptions.filter((x) => x.id !== id) }), () => repo.removeException(id));
     },
 
     async toggleDone(entry) {
@@ -133,6 +162,7 @@ export const useData = create<DataState>((set, get) => {
     async reset(demo) {
       const data = await repo.reset(demo ? DEMO : emptySnapshot());
       set({ data: structuredClone(data) });
+      repo.saveCache?.(data);
     },
   };
 });

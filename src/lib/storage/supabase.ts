@@ -22,10 +22,17 @@ function explain(message: string, code?: string): string {
   if (/Email not confirmed/i.test(message)) {
     return "Tài khoản chưa xác nhận. Trong Authentication → Users, sửa user và bật Auto Confirm.";
   }
-  if (/Failed to fetch|NetworkError|fetch failed/i.test(message)) {
+  if (/Failed to fetch|NetworkError|fetch failed|Load failed/i.test(message)) {
     return "Không kết nối được Supabase. Kiểm tra VITE_SUPABASE_URL, hoặc project đang bị pause (free tier pause sau 7 ngày không dùng).";
   }
   return message;
+}
+
+const CACHE_KEY = "track-tkb:cloud-cache";
+
+/** Ném lỗi Supabase (nếu có) dưới dạng câu dễ hiểu. */
+function check(table: string, res: { error: { message: string; code?: string } | null }) {
+  if (res.error) throw new Error(`${table}: ${explain(res.error.message, res.error.code)}`);
 }
 
 /**
@@ -42,6 +49,10 @@ export function createSupabaseRepo(): Repo {
   const userId = async () => {
     const sb = await client();
     const { data, error } = await sb.auth.getUser();
+    if (error && error.status !== 401 && error.status !== 403) {
+      // Lỗi mạng (offline, Supabase pause) — báo đúng bản chất thay vì "chưa đăng nhập".
+      throw new Error(explain(error.message, error.code));
+    }
     if (error || !data.user) throw new Error("Bạn chưa đăng nhập.");
     return data.user.id;
   };
@@ -55,12 +66,42 @@ export function createSupabaseRepo(): Repo {
 
   const remove = async (table: string, id: string) => {
     const sb = await client();
-    const { error } = await sb.from(table).delete().eq("id", id);
-    if (error) throw new Error(`${table}: ${explain(error.message, error.code)}`);
+    check(table, await sb.from(table).delete().eq("id", id));
+  };
+
+  /** User trong phiên đã lưu trên máy — không cần mạng. */
+  const sessionUserId = async (): Promise<string | null> => {
+    const sb = await getSupabase();
+    if (!sb) return null;
+    const { data } = await sb.auth.getSession();
+    return data.session?.user?.id ?? null;
   };
 
   return {
     mode: "supabase",
+
+    async loadCache() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const cached = JSON.parse(raw) as { userId: string; data: DataSnapshot };
+        const user = await sessionUserId();
+        return user && cached.userId === user ? cached.data : null;
+      } catch {
+        return null;
+      }
+    },
+
+    saveCache(data) {
+      void sessionUserId().then((userId) => {
+        if (!userId) return;
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ userId, data }));
+        } catch {
+          /* hết dung lượng localStorage — bỏ qua, cache chỉ là phụ */
+        }
+      });
+    },
 
     async load(): Promise<DataSnapshot> {
       const sb = await client();
@@ -112,19 +153,25 @@ export function createSupabaseRepo(): Repo {
           const classTag = seeded[0].id;
           const otherTag = (seeded[1] ?? seeded[0]).id;
           if (sessions.length) {
-            await sb
-              .from("sessions")
-              .update({ tag_id: classTag })
-              .eq("user_id", user)
-              .is("tag_id", null);
+            check(
+              "sessions",
+              await sb
+                .from("sessions")
+                .update({ tag_id: classTag })
+                .eq("user_id", user)
+                .is("tag_id", null),
+            );
             for (const s of sessions) if (!s.tag_id) s.tag_id = classTag;
           }
           if (entries.length) {
-            await sb
-              .from("entries")
-              .update({ tag_id: otherTag })
-              .eq("user_id", user)
-              .is("tag_id", null);
+            check(
+              "entries",
+              await sb
+                .from("entries")
+                .update({ tag_id: otherTag })
+                .eq("user_id", user)
+                .is("tag_id", null),
+            );
             for (const e of entries) if (!e.tag_id) e.tag_id = otherTag;
           }
         }
@@ -133,7 +180,7 @@ export function createSupabaseRepo(): Repo {
       const upgradedTags = upgradeGroupColors(tags);
       if (upgradedTags !== tags) {
         tags = upgradedTags;
-        await sb.from("tags").upsert(tags.map((t) => ({ ...t, user_id: user })));
+        check("tags", await sb.from("tags").upsert(tags.map((t) => ({ ...t, user_id: user }))));
       }
 
       return { settings, tags, subjects, sessions, entries, exceptions };
@@ -157,8 +204,8 @@ export function createSupabaseRepo(): Repo {
 
     async removeSubject(id) {
       const sb = await client();
-      await sb.from("sessions").delete().eq("subject_id", id);
-      await sb.from("entries").update({ subject_id: null }).eq("subject_id", id);
+      check("sessions", await sb.from("sessions").delete().eq("subject_id", id));
+      check("entries", await sb.from("entries").update({ subject_id: null }).eq("subject_id", id));
       await remove("subjects", id);
     },
 
@@ -189,24 +236,23 @@ export function createSupabaseRepo(): Repo {
     async reset(demo) {
       const sb = await client();
       const user = await userId();
-      await Promise.all([
-        sb.from("exceptions").delete().eq("user_id", user),
-        sb.from("entries").delete().eq("user_id", user),
-        sb.from("sessions").delete().eq("user_id", user),
-        sb.from("subjects").delete().eq("user_id", user),
-        sb.from("tags").delete().eq("user_id", user),
-        sb.from("settings").delete().eq("user_id", user),
-      ]);
+      // Xoá tuần tự từ bảng con lên bảng cha; lỗi ở đâu dừng ở đó và báo ra.
+      for (const table of ["exceptions", "entries", "sessions", "subjects", "tags", "settings"]) {
+        check(table, await sb.from(table).delete().eq("user_id", user));
+      }
 
       const withUser = <T extends object>(rows: T[]) => rows.map((r) => ({ ...r, user_id: user }));
 
       if (!demo) {
         const empty = emptySnapshot();
-        await sb.from("settings").upsert({
-          user_id: user,
-          semester: empty.settings.semester,
-          periods: empty.settings.periods,
-        });
+        check(
+          "settings",
+          await sb.from("settings").upsert({
+            user_id: user,
+            semester: empty.settings.semester,
+            periods: empty.settings.periods,
+          }),
+        );
         const { error } = await sb.from("tags").insert(withUser(empty.tags));
         if (error) throw new Error(explain(error.message, error.code));
         return empty;
@@ -214,9 +260,12 @@ export function createSupabaseRepo(): Repo {
 
       // Nạp dữ liệu demo lên cloud (không chỉ hiện ở máy này).
       const base = structuredClone(DEMO);
-      await sb
-        .from("settings")
-        .upsert({ user_id: user, semester: base.settings.semester, periods: base.settings.periods });
+      check(
+        "settings",
+        await sb
+          .from("settings")
+          .upsert({ user_id: user, semester: base.settings.semester, periods: base.settings.periods }),
+      );
       if (base.tags.length) {
         const { error } = await sb.from("tags").insert(withUser(base.tags));
         if (error) throw new Error(explain(error.message, error.code));

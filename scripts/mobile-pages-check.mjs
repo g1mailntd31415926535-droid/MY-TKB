@@ -1,8 +1,6 @@
-import { chromium } from "playwright-core";
+import { launchBrowser, BASE_URL } from "./lib/browser.mjs";
 
-const browser = await chromium.launch({
-  executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-});
+const browser = await launchBrowser();
 const context = await browser.newContext({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
@@ -11,10 +9,11 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 const errors = [];
+const overflow = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
 
-await page.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
+await page.goto(BASE_URL + "/?local=1", { waitUntil: "networkidle" });
 await page.waitForTimeout(600);
 
 const snapshot = {
@@ -141,6 +140,7 @@ const measure = async (label, file) => {
     };
   });
   console.log("===" + label + "===", JSON.stringify(out));
+  if (out.scroll > out.vw || out.wideCount > 0) overflow.push(label);
   await page.screenshot({ path: file, fullPage: false });
 };
 
@@ -161,4 +161,6 @@ await go("Cài đặt");
 await measure("SETTINGS", "smoke/p5-settings.png");
 
 console.log("errors:", errors.length ? errors : "none");
+console.log("tràn ngang:", overflow.length ? overflow : "none");
 await browser.close();
+process.exit(errors.length || overflow.length ? 1 : 0);

@@ -8,3 +8,12 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+// Service worker chỉ bật ở bản build: lúc dev nó sẽ cache nhầm file đang sửa.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* không có SW thì app vẫn chạy bình thường khi có mạng */
+    });
+  });
+}

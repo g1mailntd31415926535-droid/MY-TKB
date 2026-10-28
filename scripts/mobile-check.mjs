@@ -1,8 +1,6 @@
-import { chromium } from "playwright-core";
+import { launchBrowser, BASE_URL } from "./lib/browser.mjs";
 
-const browser = await chromium.launch({
-  executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-});
+const browser = await launchBrowser();
 const context = await browser.newContext({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
@@ -14,7 +12,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
 
-const base = "http://localhost:5173/?local=1";
+const base = BASE_URL + "/?local=1";
 await page.goto(base, { waitUntil: "networkidle" });
 
 const snapshot = {

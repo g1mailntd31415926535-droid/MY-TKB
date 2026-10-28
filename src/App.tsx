@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Toaster } from "sonner";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, WifiOff } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { AuthGate } from "./components/AuthGate";
 import { TodayPage } from "./pages/Today";
@@ -44,6 +44,7 @@ function Shell() {
   const page = useUi((s) => s.page);
   const ready = useData((s) => s.ready);
   const error = useData((s) => s.error);
+  const offline = useData((s) => s.offline);
 
   useEffect(() => {
     useData
@@ -54,11 +55,33 @@ function Shell() {
       });
   }, []);
 
+  // Có mạng lại thì tải dữ liệu thật thay cho bản cache.
+  useEffect(() => {
+    if (!offline) return;
+    const retry = () => useData.getState().init().catch(() => {});
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [offline]);
+
   if (error) return <SetupError message={error} />;
 
   return (
     <div className="flex h-[100dvh] w-full max-w-full flex-col overflow-hidden bg-bg">
       <Sidebar />
+      {offline ? (
+        <div className="flex shrink-0 items-center gap-2 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 ring-1 ring-amber-200 sm:px-6">
+          <WifiOff className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            Không kết nối được Supabase — đang xem dữ liệu lưu lần gần nhất. Thay đổi lúc này sẽ không lưu được.
+          </span>
+          <button
+            onClick={() => useData.getState().init().catch(() => {})}
+            className="shrink-0 font-semibold text-amber-900 underline underline-offset-2"
+          >
+            Thử lại
+          </button>
+        </div>
+      ) : null}
       <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
         {!ready ? (
           <div className="flex h-full min-h-[60vh] items-center justify-center">

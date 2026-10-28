@@ -1,12 +1,10 @@
-import { chromium } from "playwright-core";
+import { launchBrowser, BASE_URL } from "./lib/browser.mjs";
 import { mkdirSync } from "node:fs";
 
 const OUT = process.env.SMOKE_OUT ?? "smoke";
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-});
+const browser = await launchBrowser();
 
 const errors = [];
 
@@ -17,7 +15,7 @@ async function pass(name, viewport, labels) {
   });
   page.on("pageerror", (e) => errors.push(`${name} pageerror: ${e.message}`));
 
-  await page.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
+  await page.goto(BASE_URL + "/?local=1", { waitUntil: "networkidle" });
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${OUT}/${name}-01-month.png` });
 
