@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { TouchEvent } from "react";
 import { toast } from "sonner";
 import {
   BookOpen,
@@ -207,11 +208,38 @@ export function MonthPage() {
 
   const now = new Date();
 
+  const [slide, setSlide] = useState<"next" | "prev" | null>(null);
+
   const goMonth = (delta: number) => {
     const next = addMonthsISO(anchor, delta);
+    setSlide(delta > 0 ? "next" : "prev");
     setAnchor(next);
     setSelectedDate(next);
   };
+
+  // Vuốt trái → tháng sau, vuốt phải → tháng trước
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeHandlers = {
+    onTouchStart: (e: TouchEvent) => {
+      const t = e.touches[0];
+      touchStart.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+    },
+    onTouchEnd: (e: TouchEvent) => {
+      const start = touchStart.current;
+      touchStart.current = null;
+      if (!start) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      goMonth(dx < 0 ? 1 : -1);
+    },
+    onTouchCancel: () => {
+      touchStart.current = null;
+    },
+  };
+  const slideClass =
+    slide === "next" ? "animate-month-next" : slide === "prev" ? "animate-month-prev" : "";
 
   const pickDay = (date: string) => {
     setSelectedDate(date);
@@ -284,7 +312,7 @@ export function MonthPage() {
 
       {view === "calendar" ? (
         <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,1fr)]">
-          <section className="min-w-0 border-b border-line pb-3 sm:pb-4">
+          <section className="min-w-0 border-b border-line pb-3 sm:pb-4" {...swipeHandlers}>
             <h2 className="sr-only">{formatMonthLabel(anchor)}</h2>
 
             {/* Chọn tháng — kiểu app trường */}
@@ -323,65 +351,67 @@ export function MonthPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-y-0.5 pt-1 text-center">
-              {DAY_SHORT.map((d) => (
-                <div key={d} className="pb-1 text-[12px] font-bold text-slate-800 sm:text-[13px]">
-                  {d}
-                </div>
-              ))}
-            </div>
+            <div key={anchor} className={slideClass}>
+              <div className="grid grid-cols-7 gap-y-0.5 pt-1 text-center">
+                {DAY_SHORT.map((d) => (
+                  <div key={d} className="pb-1 text-[12px] font-bold text-slate-800 sm:text-[13px]">
+                    {d}
+                  </div>
+                ))}
+              </div>
 
-            <div className="grid min-w-0 grid-cols-7">
-              {cells.map((cell) => {
-                const d = fromISODate(cell.date);
-                const isToday = cell.date === today;
-                const isSelected = cell.date === selectedDate;
-                const colors = [
-                  ...new Set(
-                    cell.items
-                      .filter((i) => i.tag !== null && matchTag(i, tagFilter))
-                      .map(dotColor),
-                  ),
-                ].slice(0, 4);
+              <div className="grid min-w-0 grid-cols-7">
+                {cells.map((cell) => {
+                  const d = fromISODate(cell.date);
+                  const isToday = cell.date === today;
+                  const isSelected = cell.date === selectedDate;
+                  const colors = [
+                    ...new Set(
+                      cell.items
+                        .filter((i) => i.tag !== null && matchTag(i, tagFilter))
+                        .map(dotColor),
+                    ),
+                  ].slice(0, 4);
 
-                return (
-                  <button
-                    key={cell.date}
-                    data-date={cell.date}
-                    onClick={() => pickDay(cell.date)}
-                    className={cn(
-                      "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1 transition-colors hover:bg-slate-50 sm:py-1.5",
-                      isSelected && !isToday && "bg-red-50/80",
-                    )}
-                  >
-                    <span
+                  return (
+                    <button
+                      key={cell.date}
+                      data-date={cell.date}
+                      onClick={() => pickDay(cell.date)}
                       className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-full text-[13.5px] tabular-nums sm:h-9 sm:w-9 sm:text-[14px]",
-                        isToday
-                          ? "bg-[#1f2430] font-semibold text-white"
-                          : !cell.inMonth
-                            ? "text-slate-300"
-                            : isSelected
-                              ? "font-semibold text-accent"
-                              : "font-medium text-slate-700",
+                        "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1 transition-colors hover:bg-slate-50 sm:py-1.5",
+                        isSelected && !isToday && "bg-red-50/80",
                       )}
                     >
-                      {d.getDate()}
-                    </span>
-                    <span className="flex h-1.5 items-center gap-1">
-                      {cell.inMonth
-                        ? colors.map((c) => (
-                            <span
-                              key={c}
-                              className="h-[5px] w-[5px] rounded-full"
-                              style={{ backgroundColor: c }}
-                            />
-                          ))
-                        : null}
-                    </span>
-                  </button>
-                );
-              })}
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full text-[13.5px] tabular-nums sm:h-9 sm:w-9 sm:text-[14px]",
+                          isToday
+                            ? "bg-[#1f2430] font-semibold text-white"
+                            : !cell.inMonth
+                              ? "text-slate-300"
+                              : isSelected
+                                ? "font-semibold text-accent"
+                                : "font-medium text-slate-700",
+                        )}
+                      >
+                        {d.getDate()}
+                      </span>
+                      <span className="flex h-1.5 items-center gap-1">
+                        {cell.inMonth
+                          ? colors.map((c) => (
+                              <span
+                                key={c}
+                                className="h-[5px] w-[5px] rounded-full"
+                                style={{ backgroundColor: c }}
+                              />
+                            ))
+                          : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-muted">
@@ -464,7 +494,9 @@ export function MonthPage() {
           </aside>
         </div>
       ) : (
-        <section className="mx-auto w-full max-w-[960px] rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] ring-1 ring-slate-100 sm:p-6">
+        <section
+          {...swipeHandlers}
+          className="mx-auto w-full max-w-[960px] rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] ring-1 ring-slate-100 sm:p-6">
           <div className="mb-5 flex items-baseline justify-between gap-3">
             <h2 className="text-[17px] font-bold">{formatMonthLabel(anchor)}</h2>
             <span className="text-[12px] text-muted">{totalItems} mục</span>

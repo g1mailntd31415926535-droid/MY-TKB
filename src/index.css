@@ -80,3 +80,25 @@ input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
+
+@keyframes month-in-next {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes month-in-prev {
+  from {
+    opacity: 0.4;
+    transform: translateX(-24px);
+  }
+}
+
+@utility animate-month-next {
+  animation: month-in-next 0.22s ease-out;
+}
+
+@utility animate-month-prev {
+  animation: month-in-prev 0.22s ease-out;
+}
