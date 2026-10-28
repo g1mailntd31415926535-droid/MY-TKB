@@ -57,9 +57,9 @@ function Shell() {
   if (error) return <SetupError message={error} />;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg">
       <Sidebar />
-      <main className="min-w-0 flex-1">
+      <main className="min-w-0 flex-1 overflow-y-auto pb-20 md:pb-0">
         {!ready ? (
           <div className="flex h-full min-h-[60vh] items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />

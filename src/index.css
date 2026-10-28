@@ -21,6 +21,12 @@
   body,
   #root {
     height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   body {
@@ -29,6 +35,7 @@
     color: var(--color-fg);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
   }
 
   ::selection {
