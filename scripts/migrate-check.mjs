@@ -55,7 +55,7 @@ m.on("pageerror", (e) => errors.push("mobile pageerror: " + e.message));
 await m.goto("http://localhost:5173/?local=1", { waitUntil: "networkidle" });
 await m.waitForTimeout(900);
 await m.screenshot({ path: "smoke/18-mobile-today.png" });
-await m.getByRole("button", { name: "TKB", exact: true }).click();
+await m.getByRole("button", { name: "Thời khoá biểu", exact: true }).click();
 await m.waitForTimeout(600);
 await m.screenshot({ path: "smoke/19-mobile-month.png" });
 await m.getByRole("button", { name: "Tất cả", exact: true }).first().click();

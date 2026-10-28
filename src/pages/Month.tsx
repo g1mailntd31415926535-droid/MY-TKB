@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Plus, UserRound } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Plus,
+  UserRound,
+} from "lucide-react";
 import { useData } from "../store/data";
 import { useUi } from "../store/ui";
 import { Button } from "../components/ui";
-import { TagFilter } from "../components/tags";
+import { TagFilter, TagPill } from "../components/tags";
 import {
   DAY_LABELS,
   DAY_SHORT,
@@ -31,15 +41,26 @@ function timeRange(item: Occurrence, data: DataSnapshot): string {
   const session =
     item.source === "session" ? data.sessions.find((s) => s.id === item.id) : null;
   const periods = session ? `, Tiết ${session.period_start}-${session.period_end}` : "";
-  const end = item.end ? `-${item.end}` : "";
+  const end = item.end ? ` - ${item.end}` : "";
   return `${day}${periods} · ${item.start}${end}`;
 }
 
-function InfoRow({ label, value, blue }: { label: string; value: string; blue?: boolean }) {
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  blue,
+}: {
+  icon: typeof Clock;
+  label: string;
+  value: string;
+  blue?: boolean;
+}) {
   return (
-    <div className="flex gap-1">
-      <dt className="w-[68px] shrink-0 text-slate-500 sm:w-[78px]">{label}</dt>
-      <dd className={cn("min-w-0 break-words", blue ? "text-[#2563eb]" : "text-slate-700")}>
+    <div className="flex min-w-0 items-start gap-1.5">
+      <Icon className="mt-[2px] h-3.5 w-3.5 shrink-0 text-slate-400" />
+      <dt className="w-[64px] shrink-0 text-slate-500">{label}</dt>
+      <dd className={cn("min-w-0 flex-1 break-words", blue ? "text-[#2563eb]" : "text-slate-700")}>
         {value}
       </dd>
     </div>
@@ -63,55 +84,71 @@ function DetailItem({
   return (
     <button
       onClick={() => onOpen(item)}
-      className="w-full rounded-lg bg-white p-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.06)] ring-1 ring-slate-100 transition-shadow hover:shadow-md"
+      className="flex w-full min-w-0 gap-3 rounded-xl border-l-[3px] border-l-accent bg-white p-3 text-left shadow-[0_1px_2px_rgba(16,24,40,0.06)] ring-1 ring-slate-100 transition-shadow hover:shadow-md sm:p-3.5"
     >
-      <div className="flex gap-4">
-        <div className="w-[58px] shrink-0 whitespace-nowrap border-r border-slate-200 pr-3 text-left">
-          <p className="text-[12.5px] font-semibold tabular-nums text-slate-700">
-            {item.allDay ? "Cả ngày" : item.start}
-          </p>
-          {!item.allDay && item.end ? (
-            <p className="text-[11.5px] tabular-nums text-slate-500">{item.end}</p>
+      <div className="flex w-[52px] shrink-0 flex-col items-center pt-0.5">
+        {item.allDay ? (
+          <span className="text-[11.5px] font-semibold text-slate-700">Cả ngày</span>
+        ) : (
+          <>
+            <span className="text-[12.5px] font-semibold tabular-nums text-slate-800">
+              {item.start}
+            </span>
+            {item.end ? (
+              <>
+                <span className="my-0.5 h-3 w-px bg-slate-300" />
+                <span className="text-[12px] tabular-nums text-slate-500">{item.end}</span>
+              </>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "min-w-0 break-words text-[13.5px] font-semibold leading-snug text-slate-900",
+            item.done && "text-slate-400 line-through",
+          )}
+        >
+          {item.subject?.code ? (
+            <>
+              <span className="text-slate-500">{item.subject.code}</span>
+              <span className="text-slate-300"> · </span>
+              <span>{item.title}</span>
+            </>
+          ) : (
+            <span>{item.title}</span>
+          )}
+        </p>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {showTag ? <TagPill tag={item.tag} /> : null}
+          {live ? (
+            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700">
+              Đang diễn ra
+            </span>
+          ) : null}
+          {item.kind === "deadline" ? (
+            <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-rose-700">
+              Deadline
+            </span>
+          ) : null}
+          {item.repeatIntervalWeeks > 0 ? (
+            <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700">
+              {repeatLabel(item.repeatIntervalWeeks)}
+            </span>
           ) : null}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p
-              className={cn(
-                "text-[13.5px] font-semibold leading-snug text-[#2563eb]",
-                item.done && "text-slate-400 line-through",
-              )}
-            >
-              <span>{item.title}</span>
-              {showTag ? <span> ({item.tag!.name})</span> : null}
-            </p>
-            {live ? (
-              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700">
-                Đang diễn ra
-              </span>
-            ) : null}
-            {item.kind === "deadline" ? (
-              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-rose-700">
-                Deadline
-              </span>
-            ) : null}
-            {item.repeatIntervalWeeks > 0 ? (
-              <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700">
-                {repeatLabel(item.repeatIntervalWeeks)}
-              </span>
-            ) : null}
-          </div>
-
-          <dl className="mt-2 grid gap-y-1 text-[11.5px] leading-relaxed sm:text-[12px]">
-            <InfoRow label="Thời gian:" value={timeRange(item, data)} />
-            {item.room ? <InfoRow label="Địa điểm:" value={item.room} /> : null}
-            {item.note ? <InfoRow label="Bài học:" value={item.note} /> : null}
-            {item.subject?.teacher ? (
-              <InfoRow label="Giảng viên:" value={item.subject.teacher} blue />
-            ) : null}
-          </dl>
-        </div>
+        <dl className="mt-2 grid gap-y-1 text-[11.5px] leading-relaxed sm:text-[12px]">
+          <InfoRow icon={Clock} label="Thời gian:" value={timeRange(item, data)} />
+          {item.room ? <InfoRow icon={MapPin} label="Địa điểm:" value={item.room} /> : null}
+          {item.note ? <InfoRow icon={BookOpen} label="Bài học:" value={item.note} /> : null}
+          {item.subject?.teacher ? (
+            <InfoRow icon={UserRound} label="Giảng viên:" value={item.subject.teacher} blue />
+          ) : null}
+        </dl>
       </div>
     </button>
   );
@@ -192,95 +229,109 @@ export function MonthPage() {
   };
 
   const totalItems = monthGroups.reduce((n, g) => n + g.items.length, 0);
+  const selected = fromISODate(selectedDate);
+  const selectedLabel = `${formatShortDate(selectedDate)}/${selected.getFullYear()}`;
 
   return (
-    <div className="mx-auto max-w-[1320px] px-4 py-5 sm:px-6 sm:py-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-6 text-[13.5px]">
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="month-view"
-              checked={view === "calendar"}
-              onChange={() => setView("calendar")}
-              className="h-4 w-4 accent-[#d92d20]"
-            />
-            <span className={view === "calendar" ? "font-medium text-fg" : "text-muted"}>Lịch</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="month-view"
-              checked={view === "detail"}
-              onChange={() => setView("detail")}
-              className="h-4 w-4 accent-[#d92d20]"
-            />
-            <span className={view === "detail" ? "font-medium text-fg" : "text-muted"}>Chi tiết</span>
-          </label>
+    <div className="mx-auto w-full max-w-[1320px] px-3 pb-6 pt-3 sm:px-6 sm:pt-5">
+      {/* Thanh công cụ: chế độ xem + lọc nhóm */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="inline-flex shrink-0 rounded-full bg-slate-100 p-0.5 text-[12.5px]">
+            <label
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors",
+                view === "calendar" ? "bg-white text-accent shadow-sm" : "text-muted",
+              )}
+            >
+              <input
+                type="radio"
+                name="month-view"
+                checked={view === "calendar"}
+                onChange={() => setView("calendar")}
+                className="h-3.5 w-3.5 accent-[#d92d20]"
+              />
+              Lịch
+            </label>
+            <label
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors",
+                view === "detail" ? "bg-white text-accent shadow-sm" : "text-muted",
+              )}
+            >
+              <input
+                type="radio"
+                name="month-view"
+                checked={view === "detail"}
+                onChange={() => setView("detail")}
+                className="h-3.5 w-3.5 accent-[#d92d20]"
+              />
+              Chi tiết
+            </label>
+          </div>
+          <button
+            onClick={() => {
+              setAnchor(startOfMonthISO(today));
+              setSelectedDate(today);
+            }}
+            className="shrink-0 rounded-full border border-accent/40 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-red-50"
+          >
+            Hôm nay
+          </button>
         </div>
         <TagFilter />
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={() => {
-            setAnchor(startOfMonthISO(today));
-            setSelectedDate(today);
-          }}
-          className="rounded-full border border-accent px-4 py-1.5 text-[13px] font-semibold text-accent transition-colors hover:bg-red-50"
-        >
-          Hôm nay
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className="hidden text-[12px] text-muted sm:inline">Lịch tháng</span>
-          <select
-            value={anchor}
-            onChange={(e) => {
-              setAnchor(e.target.value);
-              setSelectedDate(e.target.value);
-            }}
-            className="h-9 rounded-md border border-line bg-white px-2.5 text-[13px] text-fg outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/10"
-          >
-            {monthOptions.map((iso) => (
-              <option key={iso} value={iso}>
-                {formatMonthLabel(iso)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       {view === "calendar" ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,1fr)]">
-          <section className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,1fr)]">
+          <section className="min-w-0 border-b border-line pb-3 sm:pb-4">
+            <h2 className="sr-only">{formatMonthLabel(anchor)}</h2>
+
+            {/* Chọn tháng — kiểu app trường */}
+            <div className="mb-2 flex items-center gap-1.5">
               <button
                 onClick={() => goMonth(-1)}
                 aria-label="Tháng trước"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-accent/60 text-accent transition-colors hover:bg-red-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
-              <h2 className="text-[18px] font-bold tracking-tight">{formatMonthLabel(anchor)}</h2>
+              <div className="relative mx-auto min-w-0 max-w-[280px] flex-1">
+                <select
+                  value={anchor}
+                  onChange={(e) => {
+                    setAnchor(e.target.value);
+                    setSelectedDate(e.target.value);
+                  }}
+                  aria-label="Chọn tháng"
+                  className="h-10 w-full appearance-none truncate rounded-full border border-line bg-white pl-3 pr-9 text-center text-[14px] font-semibold text-slate-800 outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/10"
+                >
+                  {monthOptions.map((iso) => (
+                    <option key={iso} value={iso}>
+                      {formatMonthLabel(iso)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              </div>
               <button
                 onClick={() => goMonth(1)}
                 aria-label="Tháng sau"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-accent/60 text-accent transition-colors hover:bg-red-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-y-1 text-center">
+            <div className="grid grid-cols-7 gap-y-0.5 pt-1 text-center">
               {DAY_SHORT.map((d) => (
-                <div key={d} className="pb-1 text-[13px] font-bold text-slate-800">
+                <div key={d} className="pb-1 text-[12px] font-bold text-slate-800 sm:text-[13px]">
                   {d}
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-7">
+            <div className="grid min-w-0 grid-cols-7">
               {cells.map((cell) => {
                 const d = fromISODate(cell.date);
                 const isToday = cell.date === today;
@@ -299,15 +350,15 @@ export function MonthPage() {
                     data-date={cell.date}
                     onClick={() => pickDay(cell.date)}
                     className={cn(
-                      "flex min-h-[72px] flex-col items-center gap-1 rounded-lg py-1.5 transition-colors hover:bg-slate-50 sm:min-h-[78px]",
-                      isSelected && !isToday && "bg-red-50/70",
+                      "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1 transition-colors hover:bg-slate-50 sm:py-1.5",
+                      isSelected && !isToday && "bg-red-50/80",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-full text-[14px] tabular-nums",
+                        "flex h-8 w-8 items-center justify-center rounded-full text-[13.5px] tabular-nums sm:h-9 sm:w-9 sm:text-[14px]",
                         isToday
-                          ? "bg-accent font-semibold text-white"
+                          ? "bg-[#1f2430] font-semibold text-white"
                           : !cell.inMonth
                             ? "text-slate-300"
                             : isSelected
@@ -317,12 +368,12 @@ export function MonthPage() {
                     >
                       {d.getDate()}
                     </span>
-                    <span className="flex h-2 items-center gap-1">
+                    <span className="flex h-1.5 items-center gap-1">
                       {cell.inMonth
                         ? colors.map((c) => (
                             <span
                               key={c}
-                              className="h-[6px] w-[6px] rounded-full"
+                              className="h-[5px] w-[5px] rounded-full"
                               style={{ backgroundColor: c }}
                             />
                           ))
@@ -333,7 +384,7 @@ export function MonthPage() {
               })}
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-[10.5px] text-muted">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-muted">
               {data.tags.map((t) => (
                 <span key={t.id} className="inline-flex items-center gap-1">
                   <span
@@ -349,29 +400,42 @@ export function MonthPage() {
             </div>
           </section>
 
-          <aside className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100 sm:p-5">
-            <h2 className="mb-4 text-center text-[17px] font-bold">Thông tin chi tiết</h2>
+          <aside className="min-w-0">
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Thông tin chi tiết
+              </p>
+              <h2 className="mt-1 break-words text-[15px] font-bold leading-snug text-slate-900">
+                {dayItems.length > 0
+                  ? `Bạn có ${dayItems.length} lịch học ngày ${selectedLabel}`
+                  : `Ngày ${selectedLabel} đang trống`}
+              </h2>
 
-            {dayItems.length === 0 ? (
-              <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white ring-1 ring-slate-200">
-                  <CalendarDays className="h-5 w-5 text-slate-400" />
+              {dayItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-50 ring-1 ring-slate-200">
+                    <CalendarDays className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <p className="text-[13px] text-muted">Chưa có lịch nào trong ngày này.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEntryEditor(null, selectedDate)}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Thêm lịch ngày này
+                  </Button>
                 </div>
-                <p className="text-[13px] text-muted">Ngày này đang trống.</p>
-                <Button variant="outline" size="sm" onClick={() => openEntryEditor(null, selectedDate)}>
-                  <Plus className="h-3.5 w-3.5" /> Thêm lịch ngày này
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {dayItems.map((item) => (
-                  <DetailItem key={item.key} item={item} data={data} now={now} onOpen={openItem} />
-                ))}
-              </div>
-            )}
+              ) : (
+                <div className="mt-3 space-y-2.5">
+                  {dayItems.map((item) => (
+                    <DetailItem key={item.key} item={item} data={data} now={now} onOpen={openItem} />
+                  ))}
+                </div>
+              )}
+            </div>
 
             {cancelled.length > 0 ? (
-              <div className="mt-4 border-t border-slate-200 pt-3">
+              <div className="mt-3 rounded-2xl bg-white p-3.5 ring-1 ring-slate-100">
                 <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
                   Đã huỷ / dời
                 </p>
@@ -400,7 +464,7 @@ export function MonthPage() {
           </aside>
         </div>
       ) : (
-        <section className="mx-auto max-w-[960px] rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:p-6">
+        <section className="mx-auto w-full max-w-[960px] rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] ring-1 ring-slate-100 sm:p-6">
           <div className="mb-5 flex items-baseline justify-between gap-3">
             <h2 className="text-[17px] font-bold">{formatMonthLabel(anchor)}</h2>
             <span className="text-[12px] text-muted">{totalItems} mục</span>
@@ -415,7 +479,9 @@ export function MonthPage() {
             monthGroups.map((g) => (
               <section key={g.date} className="mb-6 last:mb-0">
                 <h3 className="mb-2 flex items-baseline gap-2 border-b border-line pb-1.5">
-                  <span className="text-[13.5px] font-semibold">{DAY_LABELS[dayOfWeek(g.date) - 1]}</span>
+                  <span className="text-[13.5px] font-semibold">
+                    {DAY_LABELS[dayOfWeek(g.date) - 1]}
+                  </span>
                   <span className="text-[12px] text-muted">{formatShortDate(g.date)}</span>
                   {g.date === today ? (
                     <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-accent">
@@ -449,7 +515,9 @@ export function MonthPage() {
                   const subject = data.subjects.find((s) => s.id === session?.subject_id);
                   return (
                     <div key={x.id} className="flex items-center gap-2 text-[12px]">
-                      <span className="w-14 shrink-0 text-slate-500">{formatShortDate(x.date)}</span>
+                      <span className="w-14 shrink-0 text-slate-500">
+                        {formatShortDate(x.date)}
+                      </span>
                       <span className="min-w-0 flex-1 truncate text-slate-500 line-through">
                         {subject?.name ?? "Buổi học"}
                         {x.note ? ` · ${x.note}` : ""}

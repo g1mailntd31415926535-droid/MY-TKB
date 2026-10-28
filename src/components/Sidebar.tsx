@@ -9,20 +9,13 @@ const NAV: {
   page: Page;
   label: string;
   short: string;
-  section: string;
   icon: typeof Sun;
 }[] = [
-  { page: "today", label: "Hôm nay", short: "Hôm nay", section: "Học tập", icon: Sun },
-  {
-    page: "month",
-    label: "Thời khoá biểu",
-    short: "TKB",
-    section: "Học tập",
-    icon: CalendarDays,
-  },
-  { page: "all", label: "Tất cả", short: "Tất cả", section: "Học tập", icon: ListTodo },
-  { page: "ai", label: "AI Inbox", short: "AI", section: "Trợ lý", icon: Sparkles },
-  { page: "settings", label: "Cài đặt", short: "Cài đặt", section: "Hệ thống", icon: Settings },
+  { page: "today", label: "Hôm nay", short: "Hôm nay", icon: Sun },
+  { page: "month", label: "Thời khoá biểu", short: "TKB", icon: CalendarDays },
+  { page: "all", label: "Tất cả", short: "Tất cả", icon: ListTodo },
+  { page: "ai", label: "AI Inbox", short: "AI", icon: Sparkles },
+  { page: "settings", label: "Cài đặt", short: "Cài đặt", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -34,64 +27,59 @@ export function Sidebar() {
   const today = toISODate(new Date());
   const week = weekNumber(semester.start_date, today);
   const current = NAV.find((n) => n.page === page) ?? NAV[0];
+  const inSemester = week >= 1 && week <= semester.total_weeks;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
-      <div className="mx-auto max-w-[1320px] px-4 sm:px-6">
-        <div className="flex h-9 items-center gap-1.5 overflow-x-auto text-[11.5px] text-muted">
-          <span className="shrink-0">Trang chủ</span>
-          <span className="shrink-0 text-slate-300">/</span>
-          <span className="shrink-0">{current.section}</span>
-          <span className="shrink-0 text-slate-300">/</span>
-          <span className="shrink-0 font-semibold text-accent">{current.label}</span>
-          <span className="ml-auto hidden shrink-0 items-center gap-2 pl-4 text-[11px] sm:flex">
-            <span>{mode === "supabase" ? "Supabase" : "Lưu trên máy"}</span>
-            <span className="text-slate-300">·</span>
-            <span>
-              {week < 1 || week > semester.total_weeks
-                ? "Ngoài kỳ"
-                : `Tuần ${week} / ${semester.total_weeks}`}
-            </span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-5">
+    <header className="z-30 shrink-0">
+      {/* Thanh đỏ trên cùng — giống app của trường */}
+      <div
+        className="bg-accent text-white"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="mx-auto flex h-14 w-full max-w-[1320px] items-center gap-2 px-3 sm:px-6">
           <button
             onClick={() => setPage("month")}
-            className="flex shrink-0 items-center gap-2 pb-2 text-left"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 transition-colors hover:bg-white/25"
             aria-label="Track TKB — Thời khoá biểu"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
-              <CalendarRange className="h-4.5 w-4.5" />
-            </span>
-            <span className="hidden leading-tight sm:block">
-              <span className="block text-[14.5px] font-bold tracking-tight">Track TKB</span>
-              <span className="block max-w-[160px] truncate text-[10.5px] text-muted">
-                {semester.name}
-              </span>
-            </span>
+            <CalendarRange className="h-5 w-5" />
           </button>
-
-          <nav className="-mb-px flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
-            {NAV.map(({ page: p, label, short, icon: Icon }) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                aria-current={page === p ? "page" : undefined}
-                className={cn(
-                  "relative flex h-11 shrink-0 items-center gap-1.5 border-b-2 px-1.5 text-[12.5px] font-medium transition-colors sm:px-3.5 sm:text-[13px]",
-                  page === p
-                    ? "border-accent text-accent"
-                    : "border-transparent text-muted hover:text-fg",
-                )}
-              >
-                <Icon className="hidden h-4 w-4 sm:block" />
-                <span className="hidden sm:inline">{label}</span>
-                <span className="sm:hidden">{short}</span>
-              </button>
-            ))}
-          </nav>
+          <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold tracking-tight sm:text-[18px]">
+            {current.label}
+          </h1>
+          <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium tabular-nums">
+            {inSemester ? `Tuần ${week}` : "Ngoài kỳ"}
+          </span>
         </div>
+      </div>
+
+      {/* Tab điều hướng — gạch chân đỏ như app trường */}
+      <div className="border-b border-line bg-white">
+        <nav className="mx-auto flex w-full max-w-[1320px] gap-0.5 overflow-x-auto px-2 [scrollbar-width:none] sm:px-4 [&::-webkit-scrollbar]:hidden">
+          {NAV.map(({ page: p, label, short, icon: Icon }) => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              aria-label={label}
+              aria-current={page === p ? "page" : undefined}
+              className={cn(
+                "relative flex h-12 shrink-0 items-center gap-1.5 border-b-[3px] px-2.5 text-[13px] font-medium transition-colors sm:px-4 sm:text-[13.5px]",
+                page === p
+                  ? "border-accent text-accent"
+                  : "border-transparent text-slate-600 hover:text-fg",
+              )}
+            >
+              <Icon className="hidden h-4 w-4 sm:block" />
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+          <span className="ml-auto hidden shrink-0 items-center gap-2 pl-4 text-[11px] text-muted sm:flex">
+            <span>{mode === "supabase" ? "Supabase" : "Lưu trên máy"}</span>
+            <span className="text-slate-300">·</span>
+            <span className="max-w-[180px] truncate">{semester.name}</span>
+          </span>
+        </nav>
       </div>
     </header>
   );
