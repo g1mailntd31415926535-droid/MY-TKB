@@ -2,6 +2,7 @@ import type { AppSettings, DataSnapshot, Entry, Period, Semester, Session, Sessi
 import { emptySettings } from "../time";
 import { DEMO, defaultTags, emptySnapshot, upgradeGroupColors } from "../seed";
 import { getSupabase } from "../supabase";
+import { profileName, type ProfileId } from "../profile";
 import type { Repo } from "./types";
 
 /** Biến lỗi kỹ thuật của Supabase thành việc cần làm. */
@@ -10,10 +11,10 @@ function explain(message: string, code?: string): string {
     return "Schema `track_tkb` chưa được mở cho API. Vào Project Settings → API → Exposed schemas → thêm `track_tkb` rồi Save.";
   }
   if (code === "42P01" || /relation .* does not exist/i.test(message)) {
-    return "Chưa có bảng. Mở SQL Editor, chạy lần lượt `001_init.sql`, `002_tags.sql`, `003_recurrence_exceptions.sql`, `004_entry_repeat.sql`, `005_entry_repeat_interval.sql`.";
+    return "Chưa có bảng. Mở SQL Editor, chạy lần lượt `001_init.sql`, `002_tags.sql`, `003_recurrence_exceptions.sql`, `004_entry_repeat.sql`, `005_entry_repeat_interval.sql`, `006_profiles.sql`.";
   }
   if (code === "42703" || /column .* does not exist/i.test(message)) {
-    return "Thiếu cột mới. Mở SQL Editor, chạy `004_entry_repeat.sql` và `005_entry_repeat_interval.sql`.";
+    return "Thiếu cột mới. Mở SQL Editor, chạy `004_entry_repeat.sql`, `005_entry_repeat_interval.sql` và `006_profiles.sql`.";
   }
   if (code === "42501" || /row-level security|permission denied/i.test(message)) {
     return "RLS chặn truy cập. Kiểm tra bạn đã đăng nhập đúng user và đã chạy phần policy trong file SQL.";
@@ -28,18 +29,61 @@ function explain(message: string, code?: string): string {
   return message;
 }
 
-const CACHE_KEY = "track-tkb:cloud-cache";
+/** MyTKB giữ khoá cache cũ; TKB khác có khoá riêng. */
+const cacheKey = (profile: ProfileId) =>
+  profile === "my" ? "track-tkb:cloud-cache" : `track-tkb:cloud-cache:${profile}`;
 
 /** Ném lỗi Supabase (nếu có) dưới dạng câu dễ hiểu. */
 function check(table: string, res: { error: { message: string; code?: string } | null }) {
   if (res.error) throw new Error(`${table}: ${explain(res.error.message, res.error.code)}`);
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+let profileColumn: Promise<boolean> | null = null;
+
 /**
- * Bảng nằm trong schema `track_tkb`, mỗi dòng gắn `user_id`.
- * Xem supabase/migrations/001_init.sql.
+ * Cột `profile` có từ `006_profiles.sql`. Chưa chạy file đó thì MyTKB vẫn chạy
+ * như cũ (không lọc theo profile), còn TKB khác sẽ báo cần chạy migration.
  */
-export function createSupabaseRepo(): Repo {
+function hasProfileColumn(sb: any): Promise<boolean> {
+  profileColumn ??= sb
+    .from("settings")
+    .select("profile")
+    .limit(1)
+    .then((res: { error: { message: string; code?: string } | null }) => {
+      if (!res.error) return true;
+      if (res.error.code === "42703" || /column .*profile.* does not exist/i.test(res.error.message)) {
+        // Không nhớ kết quả "chưa có cột": chạy migration xong là app (kể cả máy
+        // khác đang mở) chuyển sang lọc theo profile ngay, không bao giờ đọc/xoá
+        // lẫn dữ liệu của TKB khác.
+        profileColumn = null;
+        return false;
+      }
+      throw new Error(explain(res.error.message, res.error.code));
+    })
+    .catch((e: unknown) => {
+      profileColumn = null; // lỗi mạng: lần sau hỏi lại
+      throw e;
+    });
+  return profileColumn!;
+}
+
+/** Bỏ cột `profile` khỏi dòng đọc về — app không cần biết tới nó. */
+function strip<T>(rows: T[] | null): T[] {
+  return (rows ?? []).map((r) => {
+    const rest = { ...r } as T & { profile?: string };
+    delete rest.profile;
+    return rest as T;
+  });
+}
+
+/**
+ * Bảng nằm trong schema `track_tkb`, mỗi dòng gắn `user_id` + `profile`
+ * (TKB nào). Xem supabase/migrations/001_init.sql và 006_profiles.sql.
+ */
+export function createSupabaseRepo(profile: ProfileId): Repo {
+  const CACHE_KEY = cacheKey(profile);
+
   const client = async () => {
     const sb = await getSupabase();
     if (!sb) throw new Error("Supabase chưa được cấu hình (thiếu VITE_SUPABASE_URL / ANON_KEY).");
@@ -57,10 +101,30 @@ export function createSupabaseRepo(): Repo {
     return data.user.id;
   };
 
-  const upsert = async (table: string, row: object) => {
+  /**
+   * Phạm vi dữ liệu của TKB đang xem: `own(q)` lọc theo user + profile,
+   * `row(r)` gắn user + profile vào dòng sắp ghi.
+   */
+  const scope = async () => {
     const sb = await client();
     const user = await userId();
-    const { error } = await sb.from(table).upsert({ ...row, user_id: user });
+    const tagged = await hasProfileColumn(sb);
+    if (!tagged && profile !== "my") {
+      throw new Error(
+        `Supabase chưa hỗ trợ nhiều TKB nên chưa mở được ${profileName(profile)}. Mở SQL Editor, chạy \`006_profiles.sql\` rồi bấm Thử lại.`,
+      );
+    }
+    return {
+      sb,
+      user,
+      own: (q: any) => (tagged ? q.eq("user_id", user).eq("profile", profile) : q.eq("user_id", user)),
+      row: <T extends object>(r: T) => (tagged ? { ...r, user_id: user, profile } : { ...r, user_id: user }),
+    };
+  };
+
+  const upsert = async (table: string, row: object) => {
+    const { sb, row: withScope } = await scope();
+    const { error } = await sb.from(table).upsert(withScope(row));
     if (error) throw new Error(`${table}: ${explain(error.message, error.code)}`);
   };
 
@@ -104,15 +168,14 @@ export function createSupabaseRepo(): Repo {
     },
 
     async load(): Promise<DataSnapshot> {
-      const sb = await client();
-      const user = await userId();
+      const { sb, own, row: withScope } = await scope();
       const [settingsRes, tagsRes, subjectsRes, sessionsRes, entriesRes, exceptionsRes] = await Promise.all([
-        sb.from("settings").select("semester, periods").eq("user_id", user).maybeSingle(),
-        sb.from("tags").select("*").eq("user_id", user).order("name"),
-        sb.from("subjects").select("*").eq("user_id", user).order("code"),
-        sb.from("sessions").select("*").eq("user_id", user),
-        sb.from("entries").select("*").eq("user_id", user),
-        sb.from("exceptions").select("*").eq("user_id", user),
+        own(sb.from("settings").select("semester, periods")).maybeSingle(),
+        own(sb.from("tags").select("*")).order("name"),
+        own(sb.from("subjects").select("*")).order("code"),
+        own(sb.from("sessions").select("*")),
+        own(sb.from("entries").select("*")),
+        own(sb.from("exceptions").select("*")),
       ]);
 
       const err =
@@ -131,23 +194,21 @@ export function createSupabaseRepo(): Repo {
           : emptySettings();
 
       if (!row) {
-        // Lần đầu đăng nhập: tạo sẵn dòng settings để lần sau không phải đoán.
+        // Lần đầu mở TKB này: tạo sẵn dòng settings để lần sau không phải đoán.
         await upsert("settings", { semester: settings.semester, periods: settings.periods });
       }
 
-      const subjects = (subjectsRes.data ?? []) as Subject[];
-      const sessions = (sessionsRes.data ?? []) as Session[];
-      const entries = (entriesRes.data ?? []) as Entry[];
-      const exceptions = (exceptionsRes.data ?? []) as SessionException[];
-      let tags = (tagsRes.data ?? []) as Tag[];
+      const subjects = strip(subjectsRes.data as Subject[] | null);
+      const sessions = strip(sessionsRes.data as Session[] | null);
+      const entries = strip(entriesRes.data as Entry[] | null);
+      const exceptions = strip(exceptionsRes.data as SessionException[] | null);
+      let tags = strip(tagsRes.data as Tag[] | null);
 
       if (tags.length === 0) {
         // Lần đầu dùng nhóm → tạo bộ mặc định và gắn:
         // lịch học → nhóm 1 (Lịch học), sự kiện/deadline → nhóm 2 (Hoạt động).
         const seeded = defaultTags();
-        const { error } = await sb
-          .from("tags")
-          .insert(seeded.map((t) => ({ ...t, user_id: user })));
+        const { error } = await sb.from("tags").insert(seeded.map((t) => withScope(t)));
         if (!error) {
           tags = seeded;
           const classTag = seeded[0].id;
@@ -155,22 +216,14 @@ export function createSupabaseRepo(): Repo {
           if (sessions.length) {
             check(
               "sessions",
-              await sb
-                .from("sessions")
-                .update({ tag_id: classTag })
-                .eq("user_id", user)
-                .is("tag_id", null),
+              await own(sb.from("sessions").update({ tag_id: classTag })).is("tag_id", null),
             );
             for (const s of sessions) if (!s.tag_id) s.tag_id = classTag;
           }
           if (entries.length) {
             check(
               "entries",
-              await sb
-                .from("entries")
-                .update({ tag_id: otherTag })
-                .eq("user_id", user)
-                .is("tag_id", null),
+              await own(sb.from("entries").update({ tag_id: otherTag })).is("tag_id", null),
             );
             for (const e of entries) if (!e.tag_id) e.tag_id = otherTag;
           }
@@ -180,7 +233,7 @@ export function createSupabaseRepo(): Repo {
       const upgradedTags = upgradeGroupColors(tags);
       if (upgradedTags !== tags) {
         tags = upgradedTags;
-        check("tags", await sb.from("tags").upsert(tags.map((t) => ({ ...t, user_id: user }))));
+        check("tags", await sb.from("tags").upsert(tags.map((t) => withScope(t))));
       }
 
       return { settings, tags, subjects, sessions, entries, exceptions };
@@ -234,24 +287,22 @@ export function createSupabaseRepo(): Repo {
     },
 
     async reset(demo) {
-      const sb = await client();
-      const user = await userId();
-      // Xoá tuần tự từ bảng con lên bảng cha; lỗi ở đâu dừng ở đó và báo ra.
+      const { sb, own, row: withScope } = await scope();
+      // Chỉ xoá dữ liệu của TKB đang xem, tuần tự từ bảng con lên bảng cha;
+      // lỗi ở đâu dừng ở đó và báo ra.
       for (const table of ["exceptions", "entries", "sessions", "subjects", "tags", "settings"]) {
-        check(table, await sb.from(table).delete().eq("user_id", user));
+        check(table, await own(sb.from(table).delete()));
       }
 
-      const withUser = <T extends object>(rows: T[]) => rows.map((r) => ({ ...r, user_id: user }));
+      const withUser = <T extends object>(rows: T[]) => rows.map((r) => withScope(r));
 
       if (!demo) {
         const empty = emptySnapshot();
         check(
           "settings",
-          await sb.from("settings").upsert({
-            user_id: user,
-            semester: empty.settings.semester,
-            periods: empty.settings.periods,
-          }),
+          await sb
+            .from("settings")
+            .upsert(withScope({ semester: empty.settings.semester, periods: empty.settings.periods })),
         );
         const { error } = await sb.from("tags").insert(withUser(empty.tags));
         if (error) throw new Error(explain(error.message, error.code));
@@ -259,12 +310,13 @@ export function createSupabaseRepo(): Repo {
       }
 
       // Nạp dữ liệu demo lên cloud (không chỉ hiện ở máy này).
-      const base = structuredClone(DEMO);
+      // Tạo mới (id mới) — dùng chung DEMO thì 2 TKB cùng nạp demo sẽ trùng id.
+      const base = demo === DEMO ? emptySnapshot() : structuredClone(demo);
       check(
         "settings",
         await sb
           .from("settings")
-          .upsert({ user_id: user, semester: base.settings.semester, periods: base.settings.periods }),
+          .upsert(withScope({ semester: base.settings.semester, periods: base.settings.periods })),
       );
       if (base.tags.length) {
         const { error } = await sb.from("tags").insert(withUser(base.tags));

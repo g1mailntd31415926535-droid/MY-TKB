@@ -1,11 +1,13 @@
 import type { DataSnapshot } from "../../types";
 import { DEMO, defaultTags, emptySnapshot, upgradeGroupColors } from "../seed";
+import type { ProfileId } from "../profile";
 import type { Repo } from "./types";
 
-const KEY = "track-tkb:v1";
+/** MyTKB giữ khoá cũ để không mất dữ liệu đã có; TKB khác dùng khoá riêng. */
+const keyFor = (profile: ProfileId) => (profile === "my" ? "track-tkb:v1" : `track-tkb:${profile}:v1`);
 
 /** Nâng dữ liệu cũ (chưa có tag) lên mô hình mới. */
-function migrate(s: DataSnapshot): DataSnapshot {
+function migrate(key: string, s: DataSnapshot): DataSnapshot {
   let changed = false;
 
   if (!Array.isArray(s.tags)) {
@@ -64,34 +66,36 @@ function migrate(s: DataSnapshot): DataSnapshot {
     changed = true;
   }
 
-  if (changed) localStorage.setItem(KEY, JSON.stringify(s));
+  if (changed) localStorage.setItem(key, JSON.stringify(s));
   return s;
 }
 
-function read(): DataSnapshot {
+function readKey(key: string, seedDemo: boolean): DataSnapshot {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) {
-      localStorage.setItem(KEY, JSON.stringify(DEMO));
-      return structuredClone(DEMO);
+      const first = seedDemo ? structuredClone(DEMO) : emptySnapshot();
+      localStorage.setItem(key, JSON.stringify(first));
+      return first;
     }
     const parsed = JSON.parse(raw) as DataSnapshot;
     if (!parsed.settings?.semester || !Array.isArray(parsed.subjects)) {
       throw new Error("bad shape");
     }
-    return migrate(parsed);
+    return migrate(key, parsed);
   } catch {
     const fresh = emptySnapshot();
-    localStorage.setItem(KEY, JSON.stringify(fresh));
+    localStorage.setItem(key, JSON.stringify(fresh));
     return fresh;
   }
 }
 
-function write(next: DataSnapshot) {
-  localStorage.setItem(KEY, JSON.stringify(next));
-}
+export function createLocalRepo(profile: ProfileId): Repo {
+  const key = keyFor(profile);
+  // TKB thứ hai bắt đầu trống, không nạp dữ liệu demo.
+  const read = () => readKey(key, profile === "my");
+  const write = (next: DataSnapshot) => localStorage.setItem(key, JSON.stringify(next));
 
-export function createLocalRepo(): Repo {
   return {
     mode: "local",
     async load() {

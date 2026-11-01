@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppSettings, DataSnapshot, Entry, Session, SessionException, Subject, Tag } from "../types";
 import { getRepo } from "../lib/storage";
 import { DEMO, emptySnapshot } from "../lib/seed";
+import { applyProfileTheme, loadProfile, saveProfile, type ProfileId } from "../lib/profile";
 
 interface DataState {
   ready: boolean;
@@ -9,8 +10,11 @@ interface DataState {
   /** Đang hiện dữ liệu cache vì không kết nối được Supabase. */
   offline: boolean;
   mode: "local" | "supabase";
+  /** TKB đang xem (MyTKB, LinTKB…). */
+  profile: ProfileId;
   data: DataSnapshot;
   init: () => Promise<void>;
+  switchProfile: (profile: ProfileId) => Promise<void>;
   saveSettings: (settings: AppSettings) => Promise<void>;
   saveTag: (tag: Tag) => Promise<void>;
   deleteTag: (id: string) => Promise<void>;
@@ -26,7 +30,11 @@ interface DataState {
   reset: (demo: boolean) => Promise<void>;
 }
 
-const repo = getRepo();
+const initialProfile = loadProfile();
+applyProfileTheme(initialProfile);
+
+/** Repo của TKB đang xem; đổi TKB thì đổi repo. */
+let repo = getRepo(initialProfile);
 
 function isNetworkError(message: string) {
   return (
@@ -42,12 +50,15 @@ export const useData = create<DataState>((set, get) => {
    * để nơi gọi hiện toast.
    */
   const mutate = async (updater: (d: DataSnapshot) => DataSnapshot, write: () => Promise<void>) => {
+    const owner = repo;
     const prev = get().data;
     const next = updater(prev);
     set({ data: next });
     try {
       await write();
     } catch (e) {
+      // Đã chuyển sang TKB khác trong lúc ghi: không đụng vào dữ liệu đang hiện.
+      if (repo !== owner) throw e;
       if (get().data === next) {
         set({ data: prev });
       } else {
@@ -59,7 +70,7 @@ export const useData = create<DataState>((set, get) => {
       }
       throw e;
     }
-    repo.saveCache?.(get().data);
+    if (repo === owner) repo.saveCache?.(get().data);
   };
 
   const upsert = <T extends { id: string }>(list: T[], item: T) => {
@@ -75,17 +86,22 @@ export const useData = create<DataState>((set, get) => {
     error: null,
     offline: false,
     mode: repo.mode,
+    profile: initialProfile,
     data: emptySnapshot(),
 
     async init() {
+      const owner = repo;
       set({ error: null });
       try {
-        const data = await repo.load();
-        set({ data, ready: true, offline: false, mode: repo.mode });
-        repo.saveCache?.(data);
+        const data = await owner.load();
+        if (repo !== owner) return; // đã chuyển TKB khác
+        set({ data, ready: true, offline: false, mode: owner.mode });
+        owner.saveCache?.(data);
       } catch (e) {
+        if (repo !== owner) return;
         const message = e instanceof Error ? e.message : String(e);
-        const cached = isNetworkError(message) ? await repo.loadCache?.() : null;
+        const cached = isNetworkError(message) ? await owner.loadCache?.() : null;
+        if (repo !== owner) return;
         if (cached) {
           set({ data: cached, ready: true, offline: true, mode: repo.mode });
           return;
@@ -93,6 +109,15 @@ export const useData = create<DataState>((set, get) => {
         set({ ready: true, error: message });
         throw e;
       }
+    },
+
+    async switchProfile(profile) {
+      if (profile === get().profile) return;
+      saveProfile(profile);
+      applyProfileTheme(profile);
+      repo = getRepo(profile);
+      set({ profile, ready: false, error: null, offline: false, data: emptySnapshot() });
+      await get().init();
     },
 
     async saveSettings(settings) {
@@ -160,9 +185,11 @@ export const useData = create<DataState>((set, get) => {
     },
 
     async reset(demo) {
-      const data = await repo.reset(demo ? DEMO : emptySnapshot());
+      const owner = repo;
+      const data = await owner.reset(demo ? DEMO : emptySnapshot());
+      if (repo !== owner) return;
       set({ data: structuredClone(data) });
-      repo.saveCache?.(data);
+      owner.saveCache?.(data);
     },
   };
 });

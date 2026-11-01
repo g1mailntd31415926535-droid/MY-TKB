@@ -137,7 +137,7 @@ export function MonthPage() {
                 name="month-view"
                 checked={view === "calendar"}
                 onChange={() => setView("calendar")}
-                className="h-3.5 w-3.5 accent-[#d92d20]"
+                className="h-3.5 w-3.5 accent-accent"
               />
               Lịch
             </label>
@@ -152,7 +152,7 @@ export function MonthPage() {
                 name="month-view"
                 checked={view === "detail"}
                 onChange={() => setView("detail")}
-                className="h-3.5 w-3.5 accent-[#d92d20]"
+                className="h-3.5 w-3.5 accent-accent"
               />
               Chi tiết
             </label>
@@ -162,7 +162,7 @@ export function MonthPage() {
               setAnchor(startOfMonthISO(today));
               setSelectedDate(today);
             }}
-            className="shrink-0 rounded-full border border-accent/40 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-red-50"
+            className="shrink-0 rounded-full border border-accent/40 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent-soft"
           >
             Hôm nay
           </button>
@@ -240,7 +240,7 @@ export function MonthPage() {
                       onClick={() => pickDay(cell.date)}
                       className={cn(
                         "flex min-w-0 flex-col items-center gap-0.5 rounded-xl py-1 transition-colors hover:bg-slate-50 sm:py-1.5",
-                        isSelected && !isToday && "bg-red-50/80",
+                        isSelected && !isToday && "bg-accent-soft/80",
                       )}
                     >
                       <span
@@ -376,7 +376,7 @@ export function MonthPage() {
                   </span>
                   <span className="text-[12px] text-muted">{formatShortDate(g.date)}</span>
                   {g.date === today ? (
-                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-accent">
+                    <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10.5px] font-semibold text-accent">
                       Hôm nay
                     </span>
                   ) : null}

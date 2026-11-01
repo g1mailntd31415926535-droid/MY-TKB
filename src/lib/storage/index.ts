@@ -1,13 +1,19 @@
 import { useCloud } from "../supabase";
+import type { ProfileId } from "../profile";
 import { createLocalRepo } from "./local";
 import { createSupabaseRepo } from "./supabase";
 import type { Repo } from "./types";
 
-let cached: Repo | null = null;
+const cached = new Map<ProfileId, Repo>();
 
-export function getRepo(): Repo {
-  cached ??= useCloud ? createSupabaseRepo() : createLocalRepo();
-  return cached;
+/** Mỗi TKB (profile) có một repo riêng, dữ liệu không lẫn vào nhau. */
+export function getRepo(profile: ProfileId): Repo {
+  let repo = cached.get(profile);
+  if (!repo) {
+    repo = useCloud ? createSupabaseRepo(profile) : createLocalRepo(profile);
+    cached.set(profile, repo);
+  }
+  return repo;
 }
 
 export type { Repo };

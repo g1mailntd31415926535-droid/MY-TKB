@@ -9,7 +9,16 @@
   --color-muted: #6b7280;
   --color-accent: #d92d20;
   --color-accent-2: #b42318;
+  /* nền nhạt của màu chủ đạo (= red-50) */
+  --color-accent-soft: oklch(97.1% 0.013 17.38);
   --font-sans: "Be Vietnam Pro", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* LinTKB: màu chủ đạo hồng pastel nhẹ (xem src/lib/profile.ts). */
+:root[data-profile="lin"] {
+  --color-accent: #e98aa9;
+  --color-accent-2: #d9718f;
+  --color-accent-soft: #fdf0f4;
 }
 
 @layer base {
@@ -49,7 +58,7 @@
   }
 
   ::selection {
-    background: rgba(217, 45, 32, 0.16);
+    background: color-mix(in srgb, var(--color-accent) 16%, transparent);
   }
 
   ::-webkit-scrollbar {

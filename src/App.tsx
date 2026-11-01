@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Toaster } from "sonner";
-import { AlertTriangle, RotateCcw, WifiOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, RotateCcw, WifiOff } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { AuthGate } from "./components/AuthGate";
 import { TodayPage } from "./pages/Today";
@@ -12,8 +12,10 @@ import { EntryEditor, SessionEditor } from "./components/editors";
 import { useUi } from "./store/ui";
 import { useData } from "./store/data";
 import { Button, Card } from "./components/ui";
+import { profileName } from "./lib/profile";
 
 function SetupError({ message }: { message: string }) {
+  const profile = useData((s) => s.profile);
   return (
     <div className="flex h-full items-center justify-center p-6">
       <Card className="w-full max-w-lg p-6">
@@ -25,7 +27,7 @@ function SetupError({ message }: { message: string }) {
           {message}
         </p>
         <ol className="mb-5 list-decimal space-y-1.5 pl-5 text-[13px] text-muted">
-          <li>Chạy lần lượt <code className="rounded bg-slate-100 px-1">supabase/migrations/001_init.sql</code>, <code className="rounded bg-slate-100 px-1">002_tags.sql</code>, <code className="rounded bg-slate-100 px-1">003_recurrence_exceptions.sql</code>, <code className="rounded bg-slate-100 px-1">004_entry_repeat.sql</code>, <code className="rounded bg-slate-100 px-1">005_entry_repeat_interval.sql</code> trong SQL Editor.</li>
+          <li>Chạy lần lượt <code className="rounded bg-slate-100 px-1">supabase/migrations/001_init.sql</code>, <code className="rounded bg-slate-100 px-1">002_tags.sql</code>, <code className="rounded bg-slate-100 px-1">003_recurrence_exceptions.sql</code>, <code className="rounded bg-slate-100 px-1">004_entry_repeat.sql</code>, <code className="rounded bg-slate-100 px-1">005_entry_repeat_interval.sql</code>, <code className="rounded bg-slate-100 px-1">006_profiles.sql</code> trong SQL Editor.</li>
           <li>Project Settings → API → Exposed schemas → thêm <code className="rounded bg-slate-100 px-1">track_tkb</code>.</li>
           <li>Authentication → Users → tạo user (bật Auto Confirm).</li>
           <li>Điền đúng <code className="rounded bg-slate-100 px-1">VITE_SUPABASE_URL</code> và <code className="rounded bg-slate-100 px-1">VITE_SUPABASE_ANON_KEY</code> rồi khởi động lại dev server.</li>
@@ -34,6 +36,11 @@ function SetupError({ message }: { message: string }) {
           <Button variant="primary" onClick={() => useData.getState().init().catch(() => {})}>
             <RotateCcw className="h-4 w-4" /> Thử lại
           </Button>
+          {profile !== "my" ? (
+            <Button onClick={() => useData.getState().switchProfile("my").catch(() => {})}>
+              <ArrowLeft className="h-4 w-4" /> Về {profileName("my")}
+            </Button>
+          ) : null}
         </div>
       </Card>
     </div>
